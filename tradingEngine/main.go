@@ -30,7 +30,7 @@ const (
 )
 
 var sendMsg chan []byte
-var btcusdt *TradePair
+var tradingServices *TradePair
 var recentTrade []interface{}
 
 var web *gin.Engine
@@ -42,7 +42,7 @@ func init() {
 
 	// Case: no env
 	if len(pairEnv) == 0 {
-		pairEnv = "btcusdt"
+		pairEnv = "tradingServices"
 		pairs = &pairEnv
 
 		priceDigit = new(int)
@@ -71,7 +71,7 @@ func main() {
 	flag.Parse()
 	gin.SetMode(gin.DebugMode)
 
-	btcusdt = NewTradePair(*pairs, *priceDigit, *quantityDigit)
+	tradingServices = NewTradePair(*pairs, *priceDigit, *quantityDigit)
 	recentTrade = make([]interface{}, 0)
 
 	go func() {
@@ -143,8 +143,8 @@ func depth(c *gin.Context) {
 	if limitInt <= 0 || limitInt > 100 {
 		limitInt = 10
 	}
-	a := btcusdt.GetAskDepth(limitInt)
-	b := btcusdt.GetBidDepth(limitInt)
+	a := tradingServices.GetAskDepth(limitInt)
+	b := tradingServices.GetBidDepth(limitInt)
 
 	c.JSON(200, gin.H{
 		"ask": a,
@@ -154,8 +154,8 @@ func depth(c *gin.Context) {
 
 func pushDepth() {
 	for {
-		ask := btcusdt.GetAskDepth(10)
-		bid := btcusdt.GetBidDepth(10)
+		ask := tradingServices.GetAskDepth(10)
+		bid := tradingServices.GetBidDepth(10)
 
 		sendMessage("depth", gin.H{
 			"ask": ask,
@@ -189,7 +189,7 @@ func cancelOrder(c *gin.Context) {
 	}
 
 	// Signal the tradingEngine to cancel the order
-	btcusdt.CancelOrder(param.OrderId)
+	tradingServices.CancelOrder(param.OrderId)
 
 	go sendMessage("cancel_order", param)
 
@@ -210,12 +210,12 @@ func sendMessage(tag string, data interface{}) {
 func watchTradeLog() {
 	for {
 		select {
-		case log, ok := <-btcusdt.ChTradeResult:
+		case log, ok := <-tradingServices.ChTradeResult:
 			if ok {
 				relog := gin.H{
-					"TradePrice":    btcusdt.Price2String(log.TradePrice),
-					"TradeAmount":   btcusdt.Price2String(log.TradeAmount),
-					"TradeQuantity": btcusdt.Qty2String(log.TradeQuantity),
+					"TradePrice":    tradingServices.Price2String(log.TradePrice),
+					"TradeAmount":   tradingServices.Price2String(log.TradeAmount),
+					"TradeQuantity": tradingServices.Qty2String(log.TradeQuantity),
 					"TradeTime":     log.TradeTime,
 					"AskOrderId":    log.AskOrderId,
 					"BidOrderId":    log.BidOrderId,
@@ -239,11 +239,11 @@ func watchTradeLog() {
 
 				//latest price
 				sendMessage("latest_price", gin.H{
-					"latest_price": btcusdt.Price2String(log.TradePrice),
+					"latest_price": tradingServices.Price2String(log.TradePrice),
 				})
 
 			}
-		case cancelOrderId := <-btcusdt.ChCancelResult:
+		case cancelOrderId := <-tradingServices.ChCancelResult:
 			sendMessage("cancel_order", gin.H{
 				"OrderId": cancelOrderId,
 			})

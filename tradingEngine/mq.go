@@ -263,11 +263,11 @@ func handle(deliveries <-chan amqp.Delivery, done chan error) {
 
 		if strings.ToLower(param.OrderType) == "ask" {
 			item := NewAskItem(pt, param.OrderId, string2decimal(param.Price), string2decimal(param.Quantity), string2decimal(param.Amount), ts)
-			btcusdt.ChNewOrder <- item
+			tradingServices.ChNewOrder <- item
 
 		} else {
 			item := NewBidItem(pt, param.OrderId, string2decimal(param.Price), string2decimal(param.Quantity), string2decimal(param.Amount), ts)
-			btcusdt.ChNewOrder <- item
+			tradingServices.ChNewOrder <- item
 		}
 
 		go sendMessage("new_order", param)
