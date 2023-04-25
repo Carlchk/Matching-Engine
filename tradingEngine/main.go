@@ -5,17 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-
 	"main/wss"
-
+	"net/http"
 	_ "net/http/pprof"
-
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,11 +18,12 @@ import (
 type PriceType int
 type OrderSide int
 
+var pairs *string
+var priceDigit *int
+var quantityDigit *int
+
 const (
-	PriceTypeLimit          PriceType = 0
-	PriceTypeMarket         PriceType = 1
-	PriceTypeMarketQuantity PriceType = 2
-	PriceTypeMarketAmount   PriceType = 3
+	PriceTypeLimit PriceType = 0
 
 	OrderSideBuy  OrderSide = 0
 	OrderSideSell OrderSide = 1
@@ -39,44 +35,81 @@ var recentTrade []interface{}
 
 var web *gin.Engine
 
+func init() {
+	pairEnv := os.Getenv("pairs")
+	priceDigitEnv := os.Getenv("priceDigit")
+	quantityDigitEnv := os.Getenv("quantityDigit")
+
+	// Case: no env
+	if len(pairEnv) == 0 {
+		pairEnv = "btcusdt"
+		pairs = &pairEnv
+
+		priceDigit = new(int)
+		*priceDigit = 2
+
+		quantityDigit = new(int)
+		*quantityDigit = 4
+
+	} else {
+		// Case: With env
+		pairs = &pairEnv
+		if len(priceDigitEnv) != 0 {
+			i64, _ := strconv.Atoi(priceDigitEnv)
+			priceDigit = &i64
+		}
+
+		if len(quantityDigitEnv) != 0 {
+			i64, _ := strconv.Atoi(quantityDigitEnv)
+			quantityDigit = &i64
+		}
+	}
+}
+
 func main() {
 	port := flag.String("port", "8080", "port")
 	flag.Parse()
 	gin.SetMode(gin.DebugMode)
 
-	btcusdt = NewTradePair("BTC_USDT", 2, 4)
+	btcusdt = NewTradePair(*pairs, *priceDigit, *quantityDigit)
 	recentTrade = make([]interface{}, 0)
 
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
 
-	startWeb(*port)
+	startWebServices(*port)
 }
 
-func startWeb(port string) {
-	web = gin.New()
-	web.LoadHTMLGlob("./webapp/*.html")
-	web.StaticFS("/webapp", http.Dir("./webapp"))
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
 
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Header("Access-Control-Allow-Methods", "POST,HEAD,PATCH, OPTIONS, GET, PUT")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func startWebServices(port string) {
+	web = gin.New()
+	web.Use(CORSMiddleware())
 	sendMsg = make(chan []byte, 100)
 
 	go pushDepth()
 	go watchTradeLog()
+	go MQStart()
 
 	web.GET("/api/depth", depth)
 	web.GET("/api/trade_log", trade_log)
-	web.POST("/api/new_order", newOrder)
-	// web.POST("/api/cancel_order", cancelOrder)
-	// web.GET("/api/test_rand", testOrder)
-
-	web.GET("/", func(c *gin.Context) {
-		c.HTML(200, "demo.html", nil)
-	})
-
-	web.GET("/preview", func(c *gin.Context) {
-		c.HTML(200, "main.html", nil)
-	})
+	web.POST("/api/cancel_order", cancelOrder)
 
 	//websocket
 	{
@@ -142,63 +175,26 @@ func trade_log(c *gin.Context) {
 	})
 }
 
-func newOrder(c *gin.Context) {
+func cancelOrder(c *gin.Context) {
 	type args struct {
-		OrderId   string `json:"order_id"`
-		OrderType string `json:"order_type"`
-		PriceType string `json:"price_type"`
-		Price     string `json:"price"`
-		Quantity  string `json:"quantity"`
-		Amount    string `json:"amount"`
+		OrderId string `json:"order_id"`
 	}
 
 	var param args
 	c.BindJSON(&param)
 
-	orderId := uuid.NewString()
-	param.OrderId = orderId
-
-	price := string2decimal(param.Price)
-	quantity := string2decimal(param.Quantity)
-
-	var pt PriceType
-
-	pt = PriceTypeLimit
-	param.Amount = "0"
-	if price.Cmp(decimal.NewFromFloat(100000000)) > 0 || price.Cmp(decimal.Zero) < 0 {
-		c.JSON(200, gin.H{
-			"ok":    false,
-			"error": "Price must be > 0 and < 100000000",
-		})
-		return
-	}
-	if quantity.Cmp(decimal.NewFromFloat(100000000)) > 0 || quantity.Cmp(decimal.Zero) <= 0 {
-		c.JSON(200, gin.H{
-			"ok":    false,
-			"error": "Quantity must be > 0 and < 100000000",
-		})
+	if param.OrderId == "" {
+		c.Abort()
 		return
 	}
 
-	if strings.ToLower(param.OrderType) == "ask" {
-		param.OrderId = fmt.Sprintf("a-%s", orderId)
-		item := NewAskItem(pt, param.OrderId, string2decimal(param.Price), string2decimal(param.Quantity), string2decimal(param.Amount), time.Now().UnixNano())
-		btcusdt.ChNewOrder <- item
+	// Signal the tradingEngine to cancel the order
+	btcusdt.CancelOrder(param.OrderId)
 
-	} else {
-		param.OrderId = fmt.Sprintf("b-%s", orderId)
-		item := NewBidItem(pt, param.OrderId, string2decimal(param.Price), string2decimal(param.Quantity), string2decimal(param.Amount), time.Now().UnixNano())
-		btcusdt.ChNewOrder <- item
-	}
-
-	go sendMessage("new_order", param)
+	go sendMessage("cancel_order", param)
 
 	c.JSON(200, gin.H{
 		"ok": true,
-		"data": gin.H{
-			"ask_len": btcusdt.AskLen(),
-			"bid_len": btcusdt.BidLen(),
-		},
 	})
 }
 
@@ -216,8 +212,6 @@ func watchTradeLog() {
 		select {
 		case log, ok := <-btcusdt.ChTradeResult:
 			if ok {
-				//
-
 				relog := gin.H{
 					"TradePrice":    btcusdt.Price2String(log.TradePrice),
 					"TradeAmount":   btcusdt.Price2String(log.TradeAmount),
@@ -227,6 +221,16 @@ func watchTradeLog() {
 					"BidOrderId":    log.BidOrderId,
 				}
 				sendMessage("trade", relog)
+
+				relogJSON, err := json.Marshal(relog)
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+
+				jsonStr := string(relogJSON)
+
+				pushToOutputqueue(jsonStr)
 
 				if len(recentTrade) >= 10 {
 					recentTrade = recentTrade[1:]

@@ -1,0 +1,16 @@
+FROM golang:alpine
+
+WORKDIR /app
+
+ADD . /app
+RUN go mod download
+
+COPY *.go ./
+
+# Build
+RUN go build -o /api
+
+EXPOSE 3001
+
+# Run
+CMD ["/api"]

@@ -40,27 +40,25 @@ func (t *TradePair) depthTicker(ob *Orderbook) {
 			ob.Lock()
 			defer ob.Unlock()
 
-			ob.depth = [][2]string{}
 			depthMap := make(map[string]string)
+			ob.depth = [][2]string{}
 
-			if ob.Len() > 0 {
-				// Traverse the red-black tree using the iterator function
-				it := ob.rbt.Iterator()
-				for it.Next() {
-					node := it.Value().(TreeItem)
-					price := FormatDecimal2String(node.GetPrice(), t.priceDigit)
+			if ob.h.Len() > 0 {
+				for i := 0; i < ob.h.Len(); i++ {
+					item := (*ob.h)[i]
 
-					// If the price already exists in the hashmap, increment its amount by the current node amount
+					price := FormatDecimal2String(item.GetPrice(), t.priceDigit)
+
 					if _, ok := depthMap[price]; !ok {
-						depthMap[price] = FormatDecimal2String(node.GetQuantity(), t.quantityDigit)
+						depthMap[price] = FormatDecimal2String(item.GetQuantity(), t.quantityDigit)
 					} else {
 						old_qunantity, _ := decimal.NewFromString(depthMap[price])
-						depthMap[price] = FormatDecimal2String(old_qunantity.Add(node.GetQuantity()), t.quantityDigit)
+						depthMap[price] = FormatDecimal2String(old_qunantity.Add(item.GetQuantity()), t.quantityDigit)
 					}
 				}
 
-				// Convert the hashmap to a 2D array sorted by k
-				ob.depth = MapToSortedArr(depthMap, ob.rbt.Root.Value.(TreeItem).GetOrderSide())
+				ob.depth = MapToSortedArr(depthMap, ob.Root().GetOrderSide())
+
 			}
 
 		}()

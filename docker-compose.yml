@@ -1,0 +1,68 @@
+version: '3.6'
+services:
+  messageQueue:
+    image: rabbitmq:3.11-rc-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - default
+    restart: always
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+  tradingenginebtc:
+    build:
+      context: ./tradingEngine
+      dockerfile: ./dockerfile
+    environment:
+      - pairs=btcusdt
+      - priceDigit=2
+      - quantityDigit=4
+    ports:
+      - "4001:8080"
+    depends_on:
+      messageQueue:
+        condition: service_healthy
+    links:
+      - messageQueue
+    networks:
+      - default
+  tradingengineeth:
+    build:
+      context: ./tradingEngine
+      dockerfile: ./dockerfile
+    environment:
+      - pairs=ethusdt
+      - priceDigit=2
+      - quantityDigit=4
+    ports:
+      - "4002:8080"
+    depends_on:
+      - messageQueue
+    links:
+      - messageQueue
+    restart: always
+    networks:
+      - default
+  api:
+    build:
+      context: ./api
+      dockerfile: ./dockerfile
+    ports:
+      - "3001:3001"
+    networks:
+      - default
+    depends_on:
+      - messageQueue
+  vite_docker:
+    build:
+      context: ./app
+      dockerfile: ./dockerfile
+    ports:
+      - 3000:4173
+    tty: true
+    networks:
+      - default

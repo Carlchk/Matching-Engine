@@ -6,11 +6,21 @@ import (
 
 type Order struct {
 	orderId    string
-	priceType  PriceType
 	price      decimal.Decimal
 	quantity   decimal.Decimal
 	createTime int64
-	amount     decimal.Decimal
+	index      int
+
+	priceType PriceType
+	amount    decimal.Decimal
+}
+
+func (o *Order) GetIndex() int {
+	return o.index
+}
+
+func (o *Order) SetIndex(index int) {
+	o.index = index
 }
 
 func (o *Order) SetQuantity(qnt decimal.Decimal) {
@@ -48,19 +58,24 @@ type AskItem struct {
 	Order
 }
 
+type BidItem struct {
+	Order
+}
 func (a *AskItem) GetOrderSide() OrderSide {
 	return OrderSideSell
 }
 
-type BidItem struct {
-	Order
-}
-
-func (a *BidItem) GetOrderSide() OrderSide {
+func (b *BidItem) GetOrderSide() OrderSide {
 	return OrderSideBuy
 }
 
+func (a *AskItem) Less(b HeapItem) bool {
+	return (a.price.Cmp(b.(*AskItem).price) == -1) || (a.price.Cmp(b.(*AskItem).price) == 0 && a.createTime < b.(*AskItem).createTime)
+}
 
+func (a *BidItem) Less(b HeapItem) bool {
+	return (a.price.Cmp(b.(*BidItem).price) == 1) || (a.price.Cmp(b.(*BidItem).price) == 0 && a.createTime < b.(*BidItem).createTime)
+}
 
 func NewAskItem(pt PriceType, uniqId string, price, quantity, amount decimal.Decimal, createTime int64) *AskItem {
 	return &AskItem{

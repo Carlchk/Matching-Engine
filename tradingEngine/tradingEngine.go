@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ type TradeResult struct {
 type TradePair struct {
 	Symbol         string
 	ChTradeResult  chan TradeResult
-	ChNewOrder     chan TreeItem
+	ChNewOrder     chan HeapItem
 	ChCancelResult chan string
 
 	priceDigit    int
@@ -39,7 +40,7 @@ func NewTradePair(symbol string, priceDigit, quantityDigit int) *TradePair {
 	t := &TradePair{
 		Symbol:         symbol,
 		ChTradeResult:  make(chan TradeResult, 10),
-		ChNewOrder:     make(chan TreeItem),
+		ChNewOrder:     make(chan HeapItem),
 		ChCancelResult: make(chan string, 10),
 
 		priceDigit:    priceDigit,
@@ -73,7 +74,7 @@ func (t *TradePair) matching() {
 
 }
 
-func (t *TradePair) handlerNewOrder(newOrder TreeItem) {
+func (t *TradePair) handlerNewOrder(newOrder HeapItem) {
 	t.w.Lock()
 	defer t.w.Unlock()
 
@@ -99,8 +100,8 @@ func (t *TradePair) handlerLimitOrder() {
 			return false
 		}
 
-		askTop := t.AsksOrderbook.Top()
-		bidTop := t.BidsOrderbook.Top()
+		askTop := t.AsksOrderbook.Root()
+		bidTop := t.BidsOrderbook.Root()
 
 		defer func() {
 			if askTop.GetQuantity().Equal(decimal.Zero) {
@@ -145,7 +146,7 @@ func (t *TradePair) handlerLimitOrder() {
 	}
 }
 
-func (t *TradePair) sendTradeResultNotify(ask, bid TreeItem, price, tradeQty decimal.Decimal, market_done string) {
+func (t *TradePair) sendTradeResultNotify(ask, bid HeapItem, price, tradeQty decimal.Decimal, market_done string) {
 	tradelog := TradeResult{}
 	tradelog.Symbol = t.Symbol
 	tradelog.AskOrderId = ask.GetUniqueId()
@@ -175,4 +176,18 @@ func (t *TradePair) BidLen() int {
 	defer t.w.Unlock()
 
 	return t.BidsOrderbook.Len()
+}
+
+func (t *TradePair) CancelOrder(uniq string) {
+	t.w.Lock()
+	defer t.w.Unlock()
+	
+	// Get first char of uniq to determine which queue to remove
+	if strings.HasPrefix(uniq, "a-") {
+		t.AsksOrderbook.Remove(uniq)
+	} else {
+		t.BidsOrderbook.Remove(uniq)
+	}
+	// Callback when removed
+	t.ChCancelResult <- uniq
 }

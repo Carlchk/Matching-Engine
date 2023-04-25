@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  /* margin: 0; */
+  font-family: 'IBM Plex Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.bg-myblack {
+  --tw-bg-opacity: 1;
+  background-color: rgb(22 26 30 / var(--tw-bg-opacity));
+}
+
+.label-color {
+  --tw-text-opacity: 1;
+  color: rgb(132 142 156 / var(--tw-text-opacity));
+}
+
+.buy-color {
+  --tw-text-opacity: 1;
+  color: rgb(14 203 129 / var(--tw-text-opacity));
+}
+
+.bg-buy-color {
+  --tw-text-opacity: 1;
+  background-color: rgb(14 203 129 / var(--tw-text-opacity));
+}
+
+.sell-color {
+  --tw-text-opacity: 1;
+  color: rgb(246 70 93 / var(--tw-text-opacity));
+}
+
+.bg-sell-color {
+  --tw-text-opacity: 1;
+  background-color: rgb(246 70 93 / var(--tw-text-opacity));
+}
+
+.parent {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  grid-column-gap: 0px;
+  grid-row-gap: 0px;
+}
+
+.div1 {
+  border-color: rgb(0 0 0);
+  border-style: solid;
+  border-width: 1px;
+  grid-area: 1 / 1 / 6 / 2;
+}
+
+.div2 {
+  border-style: solid;
+  border-color: rgb(0 0 0);
+  border-width: 1px;
+  grid-area: 1 / 2 / 4 / 5;
+}
+
+.div3 {
+  border-style: solid;
+  border-color: rgb(0 0 0);
+  border-width: 1px;
+  grid-area: 4 / 2 / 6 / 5;
+}
+
+.div4 {
+  border-style: solid;
+  border-color: rgb(0 0 0);
+  border-width: 1px;
+  grid-area: 1 / 5 / 6 / 6;
+}
