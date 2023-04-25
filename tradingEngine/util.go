@@ -2,21 +2,11 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
-	"time"
-
 	"github.com/shopspring/decimal"
 )
 
 func string2decimal(a string) decimal.Decimal {
 	d, _ := decimal.NewFromString(a)
-	return d
-}
-
-func randDecimal(min, max int64) decimal.Decimal {
-	rand.Seed(time.Now().UnixNano())
-
-	d := decimal.New(rand.Int63n(max-min)+min, 0)
 	return d
 }
 
